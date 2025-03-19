@@ -123,7 +123,7 @@ public class RegistrationServiceTest {
         List<Course> registeredCourses = registrationService.registerCourse(1L, "student1@example.com");
 
         assertNotNull(registeredCourses);
-        assertEquals(3, registeredCourses.size()); // Kỳ vọng 3 khóa học (2 cũ + 1 mới)
+        assertEquals(3, registeredCourses.size());
         assertTrue(registeredCourses.contains(futureCourse));
         verify(registrationRepository, times(1)).save(argThat(reg -> reg.getPrice().equals(BigInteger.valueOf(750000))));
     }

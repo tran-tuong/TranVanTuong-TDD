@@ -141,4 +141,70 @@ public class RegistrationControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", Matchers.is("Course with ID 999 not found")));
     }
+
+    @Test
+    public void shouldRegisterThirdCourseWithDiscount() throws Exception {
+        Course thirdCourse = Course.builder()
+                .id(3L)
+                .name("Advanced Java")
+                .startTime(LocalDateTime.of(2025, 6, 1, 9, 0))
+                .endTime(LocalDateTime.of(2025, 6, 30, 17, 0))
+                .price(BigInteger.valueOf(2000000))
+                .build();
+
+        String requestJson = "{\"courseId\": 3, \"email\": \"student1@example.com\"}";
+        when(registrationService.registerCourse(3L, "student1@example.com"))
+                .thenReturn(Collections.singletonList(thirdCourse));
+
+        mockMvc.perform(post("/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[0].id", Matchers.is(3)))
+                .andExpect(jsonPath("$[0].name", Matchers.is("Advanced Java")));
+    }
+
+    @Test
+    public void shouldFailWhenRegisteringNonExistentCourse() throws Exception {
+        String requestJson = "{\"courseId\": 999, \"email\": \"student1@example.com\"}";
+        when(registrationService.registerCourse(999L, "student1@example.com"))
+                .thenThrow(new IllegalArgumentException("Course with ID 999 not found"));
+
+        mockMvc.perform(post("/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", Matchers.is("Course with ID 999 not found")));
+    }
+
+    @Test
+    public void shouldReturnEmptyListWhenNoRegisteredCourses() throws Exception {
+        when(registrationService.getRegisteredCourses("student1@example.com"))
+                .thenReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/registered-courses/student1@example.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", Matchers.hasSize(0)));
+    }
+
+    @Test
+    public void shouldFailWhenUnregisteringPastCourse() throws Exception {
+        when(registrationService.unregisterCourse(1L, "student1@example.com"))
+                .thenThrow(new IllegalStateException("Cannot unregister a past course"));
+
+        mockMvc.perform(delete("/unregister/1/student1@example.com"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", Matchers.is("Cannot unregister a past course")));
+    }
+
+    @Test
+    public void shouldFailWhenStudentNotFoundOnUnregister() throws Exception {
+        when(registrationService.unregisterCourse(1L, "unknown@example.com"))
+                .thenThrow(new IllegalArgumentException("Student with email unknown@example.com not found"));
+
+        mockMvc.perform(delete("/unregister/1/unknown@example.com"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", Matchers.is("Student with email unknown@example.com not found")));
+    }
 }
