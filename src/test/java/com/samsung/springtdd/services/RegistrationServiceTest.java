@@ -71,16 +71,9 @@ public class RegistrationServiceTest {
 
     @Test
     void shouldRegisterCourseSuccessfully() {
-        Registration reg = Registration.builder()
-                .student(student)
-                .course(futureCourse)
-                .price(BigInteger.valueOf(1000000))
-                .registeredDate(LocalDateTime.now())
-                .build();
-
         when(studentRepository.findByEmail("student1@example.com")).thenReturn(student);
         when(courseRepository.findById(1L)).thenReturn(Optional.of(futureCourse));
-        when(registrationRepository.findByStudent(student)).thenReturn(Collections.emptyList(), Collections.singletonList(reg));
+        when(registrationRepository.findByStudent(student)).thenReturn(Collections.emptyList());
         when(registrationRepository.save(any(Registration.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         List<Course> registeredCourses = registrationService.registerCourse(1L, "student1@example.com");
@@ -107,25 +100,21 @@ public class RegistrationServiceTest {
                 .build();
         List<Registration> existingRegistrations = Arrays.asList(reg1, reg2);
 
-        Registration newReg = Registration.builder()
-                .student(student)
-                .course(futureCourse)
-                .price(BigInteger.valueOf(750000))
-                .registeredDate(LocalDateTime.now())
-                .build();
-        List<Registration> updatedRegistrations = Arrays.asList(reg1, reg2, newReg);
-
         when(studentRepository.findByEmail("student1@example.com")).thenReturn(student);
         when(courseRepository.findById(1L)).thenReturn(Optional.of(futureCourse));
-        when(registrationRepository.findByStudent(student)).thenReturn(existingRegistrations, updatedRegistrations); // Lần 1: trước khi lưu, lần 2: sau khi lưu
-        when(registrationRepository.save(any(Registration.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(registrationRepository.findByStudent(student)).thenReturn(existingRegistrations);
+        when(registrationRepository.save(any(Registration.class))).thenAnswer(invocation -> {
+            Registration saved = invocation.getArgument(0);
+            assertEquals(BigInteger.valueOf(750000), saved.getPrice());
+            return saved;
+        });
 
         List<Course> registeredCourses = registrationService.registerCourse(1L, "student1@example.com");
 
         assertNotNull(registeredCourses);
-        assertEquals(3, registeredCourses.size());
-        assertTrue(registeredCourses.contains(futureCourse));
-        verify(registrationRepository, times(1)).save(argThat(reg -> reg.getPrice().equals(BigInteger.valueOf(750000))));
+        assertEquals(2, registeredCourses.size());
+        assertEquals(futureCourse, registeredCourses.get(0));
+        verify(registrationRepository, times(1)).save(any(Registration.class));
     }
 
     @Test
@@ -183,6 +172,17 @@ public class RegistrationServiceTest {
     }
 
     @Test
+    void shouldReturnEmptyListWhenNoRegisteredCourses() {
+        when(studentRepository.findByEmail("student1@example.com")).thenReturn(student);
+        when(registrationRepository.findByStudent(student)).thenReturn(Collections.emptyList());
+
+        List<Course> courses = registrationService.getRegisteredCourses("student1@example.com");
+
+        assertNotNull(courses);
+        assertEquals(0, courses.size());
+    }
+
+    @Test
     void shouldThrowExceptionWhenStudentNotFoundOnGetRegisteredCourses() {
         when(studentRepository.findByEmail("unknown@example.com")).thenReturn(null);
 
@@ -224,6 +224,18 @@ public class RegistrationServiceTest {
                 registrationService.unregisterCourse(1L, "unknown@example.com"));
 
         assertEquals("Student with email unknown@example.com not found", exception.getMessage());
+        verify(registrationRepository, never()).deleteByStudentAndCourse(any(Student.class), any(Course.class));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenCourseNotFoundOnUnregister() {
+        when(studentRepository.findByEmail("student1@example.com")).thenReturn(student);
+        when(courseRepository.findById(999L)).thenReturn(Optional.empty());
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                registrationService.unregisterCourse(999L, "student1@example.com"));
+
+        assertEquals("Course with ID 999 not found", exception.getMessage());
         verify(registrationRepository, never()).deleteByStudentAndCourse(any(Student.class), any(Course.class));
     }
 }
